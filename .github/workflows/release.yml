@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            asset_name: linux-musl-amd64
+            build_command: cargo build --release --target=x86_64-unknown-linux-musl
+            install_cross: false
+            install_musl_tools: true
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            asset_name: linux-musl-aarch64
+            build_command: cross build --release --target=aarch64-unknown-linux-musl
+            install_cross: true
+            install_musl_tools: false
+          - os: macos-14
+            target: aarch64-apple-darwin
+            asset_name: darwin-aarch64
+            build_command: cargo build --release --target=aarch64-apple-darwin
+            install_cross: false
+            install_musl_tools: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install musl tools
+        if: matrix.install_musl_tools
+        run: sudo apt-get install -qq -y musl-tools --no-install-recommends
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.install_cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: ${{ matrix.build_command }}
+        env:
+          RUSTFLAGS: -C strip=symbols
+
+      - name: Package archive
+        run: |
+          tar czf marquint-${{ matrix.asset_name }}.tar.gz \
+            -C target/${{ matrix.target }}/release marquint
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: marquint-${{ matrix.asset_name }}.tar.gz
