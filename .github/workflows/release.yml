@@ -71,6 +71,6 @@ jobs:
             -C target/${{ matrix.target }}/release marquint
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: marquint-${{ matrix.asset_name }}.tar.gz
